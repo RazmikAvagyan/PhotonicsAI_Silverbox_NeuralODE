@@ -70,3 +70,11 @@ def get_dataloaders(seq_len=20, batch_size=64):
         shuffle=True
     )
     return train_loader
+
+
+if __name__ == "__main__":
+    # Dataset and preprocessing information
+    print(f"Training samples: {len(y_train)} ({len(y_train) * DT:.2f} s)")
+    print(f"Test samples:     {len(y_test)} ({len(y_test) * DT:.2f} s)")
+    print(f"YS = {YS:.4f} V, US = {US:.4f} V, W0 = {W0:.1f} rad/s, H = {H:.3f}")
+    print(f"Zero-prediction RMSE: train {np.sqrt(np.mean(y_train ** 2)):.4f} V, test {np.sqrt(np.mean(y_test ** 2)):.4f} V")

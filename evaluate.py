@@ -51,7 +51,7 @@ def evaluate():
     # ---- Part 1: architectures (all trained with the same default settings) ----
     print("PART 1: ARCHITECTURES")
     print("-" * 70)
-    best_label, best_test, best_pred = None, float("inf"), None   # best over ALL runs (Parts 1 and 2)
+    best_label, best_test, best_pred, best_train = None, float("inf"), None, None   # best over ALL runs (Parts 1 and 2)
     arch_preds = {}                                               # free runs of the six architectures
     for act in (nn.Tanh, nn.SiLU, nn.GELU):
         for dim in (32, 64):
@@ -60,12 +60,11 @@ def evaluate():
             print(f"{label:<12} | Train RMSE: {train_rmse:.4f} V | Test RMSE: {test_rmse:.4f} V")
             arch_preds[label] = pred
             if test_rmse < best_test:
-                best_label, best_test, best_pred = label, test_rmse, pred
+                best_label, best_test, best_pred, best_train = label, test_rmse, pred, train_rmse
     print(f"\nBest architecture (default training): {best_label} with Test RMSE {best_test:.4f} V")
 
-    # ---- Part 2: training hyperparameters, one change at a time (SiLU, 64 units) ----
-    print("\nPART 2: HYPERPARAMETERS (SiLU, 64 units; one change from the base run)")
-    print("-" * 70)
+    # ---- Part 2: training hyperparameters, one change at a time, for EVERY architecture ----
+    print("\nPART 2: HYPERPARAMETERS (every architecture; one change from the base run)")
     runs = [
         ("base (Adam, lr 0.002, 20 epochs, rollout 20)", {}),
         ("rollout length = 10", {"seq_len": 10}),
@@ -77,13 +76,18 @@ def evaluate():
         ("optimizer = AdamW", {"optimizer_name": "adamw"}),
         ("optimizer = RMSprop", {"optimizer_name": "rmsprop"}),
     ]
-    for name, change in runs:
-        train_rmse, test_rmse, pred = train_and_test(nn.SiLU, 64, **change)
-        print(f"{name:<46} | Train: {train_rmse:.4f} V | Test: {test_rmse:.4f} V")
-        if test_rmse < best_test:
-            best_label, best_test, best_pred = f"SiLU_dim64, {name}", test_rmse, pred
+    for act in (nn.Tanh, nn.SiLU, nn.GELU):
+        for dim in (32, 64):
+            label = f"{act.__name__}_dim{dim}"
+            print("-" * 70)
+            print(label)
+            for name, change in runs:
+                train_rmse, test_rmse, pred = train_and_test(act, dim, **change)
+                print(f"{name:<46} | Train: {train_rmse:.4f} V | Test: {test_rmse:.4f} V")
+                if test_rmse < best_test:
+                    best_label, best_test, best_pred, best_train = f"{label}, {name}", test_rmse, pred, train_rmse
     print("=" * 70)
-    print(f"KEPT MODEL (best test RMSE over all runs): {best_label} | Test RMSE {best_test:.4f} V")
+    print(f"KEPT MODEL (best test RMSE over all runs): {best_label} | Train RMSE {best_train:.4f} V | Test RMSE {best_test:.4f} V")
     print("=" * 70)
 
     # ---- Figure 2: all six architectures, first 250 test samples, and their absolute errors ----
