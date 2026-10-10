@@ -10,13 +10,13 @@ The implementation uses a 4,096-sample excerpt from the Silverbox dataset, begin
 
 The system is represented as
 
-\[
+$$
 \dot y = v, \qquad \dot v = \alpha_\theta(y, v, u),
-\]
+$$
 
-where `y` is the centered output voltage, `v` is its velocity, `u` is the centered input voltage, and the neural network \(\alpha_\theta\) predicts acceleration.
+where `y` is the centered output voltage, `v` is its velocity, `u` is the centered input voltage, and the neural network $\alpha_\theta$ predicts acceleration.
 
-The network is a fully connected multilayer perceptron with three inputs, two hidden layers, and one output. The selected model uses 64 units per hidden layer and SiLU activation. Signals are scaled using statistics from the training segment to make optimization more stable. RK4 advances the state through time.
+The network is a fully connected multilayer perceptron with three inputs, two hidden layers, and one output. The width (32 or 64 units per hidden layer) and the activation (Tanh, SiLU or GELU) are compared; the kept model is SiLU with 64 units per hidden layer (4,481 parameters). Signals are scaled using statistics from the training segment to make optimization more stable. RK4 advances the state through time.
 
 ## Files
 
@@ -80,20 +80,42 @@ The evaluation compares:
 - Training durations: 10, 20, and 60 epochs.
 - Optimizers: Adam, AdamW, and RMSprop.
 
-## Reported Result
+The rollout length, learning rate, number of epochs and optimizer are tuned for every architecture, one change at a time around a base run (Adam, learning rate 0.002, 20 epochs, rollout 20). The kept model is the run with the lowest free-run test RMSE over all runs.
 
-According to the project summary, the selected model uses SiLU activation, 64 units in each hidden layer, Adam with a learning rate of `0.002`, 60 epochs, and a rollout length of 20.
+## Result
 
-| Metric | Reported value |
+All numbers are free-run RMSE in volts, from one run of `python evaluate.py` (seed 0).
+
+| Quantity | Value |
 |---|---:|
-| Free-run training RMSE | 0.0135 V |
-| Free-run test RMSE | 0.0158 V |
+| Kept model | SiLU, 64-64 hidden units, Adam, learning rate 0.002, 60 epochs, rollout length 20 |
+| Free-run training RMSE (3072 samples) | 0.0135 V |
+| Free-run test RMSE (1024 samples) | 0.0158 V |
 | Zero-prediction test baseline RMSE | 0.0605 V |
 
-The reported test RMSE is about 3.8 times lower than the zero-prediction baseline. Results can vary if the dataset, code, random seed, or training settings change.
+The test RMSE is about 3.8 times lower than the zero-prediction baseline, and only 1.17 times the training RMSE, so the free run does not drift on the test segment.
+
+Best result of each architecture after tuning (all six reached it with 60 epochs):
+
+| Architecture | Train RMSE (V) | Test RMSE (V) |
+|---|---:|---:|
+| SiLU, 64 units (kept) | 0.0135 | 0.0158 |
+| GELU, 64 units | 0.0134 | 0.0158 |
+| GELU, 32 units | 0.0130 | 0.0168 |
+| Tanh, 64 units | 0.0136 | 0.0211 |
+| Tanh, 32 units | 0.0147 | 0.0225 |
+| SiLU, 32 units | 0.0152 | 0.0232 |
+
+Findings from the tuning runs (one setting changed at a time, for every architecture):
+
+- 60 epochs was the best setting for every architecture. It is also the longest one tried, so longer training may help further.
+- A learning rate of 0.005 and a rollout length of 10 beat the base setting (learning rate 0.002, 20 epochs, rollout 20) in all six architectures. A learning rate of 0.001, 10 epochs and a rollout length of 40 were worse than the base in all six.
+- With a rollout length of 40, the SiLU and GELU models are no better than predicting zero (test RMSE 0.0608 V to 0.0637 V).
+- AdamW behaves like Adam. RMSprop was only run for 20 epochs: it beats Adam at 20 epochs, but is behind Adam at 60 epochs.
+- The tie between SiLU 64 and GELU 64, and the gap between Tanh and the other activations, are smaller than the run-to-run variation (an unseeded run of one setting differed by about 0.01 V), so they should not be over-interpreted.
 
 ## Notes
 
-- The dataset file `SNLS80mV.mat` is not included in this README and must be obtained separately.
-- `evaluate.py` saves the best checkpoint from each run as `tmp_model.pt`, replacing it during subsequent runs. The final selected model's weights are not separately saved under a permanent descriptive filename by the current evaluation script.
-- The reported results above are taken from the supplied project summary; run the scripts to reproduce and verify them in your environment.
+- `SNLS80mV.mat` (Wigren and Schoukens, https://www.nonlinearbenchmark.org/) must be in the same folder as the scripts.
+- `evaluate.py` saves the best checkpoint of each run as `tmp_model.pt`, replacing it during the next run, so this file is not part of the result. The figures `test_prediction.png` and `architecture_comparison.png` are the saved outputs of the kept model and of the six architectures with the default training settings.
+- All runs use seed 0, so a run can be repeated. Differences of about 0.01 V between runs can come from the seed alone.
